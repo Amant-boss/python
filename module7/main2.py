@@ -11,5 +11,4 @@ fruits = {
 
 try:
     print(fruits["cherry"])
-except KeyError:
     print("That doesnt exist")
