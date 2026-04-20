@@ -2,6 +2,8 @@ import pandas as pd
 import streamlit as st
 import plotly_express as px
 
+from module14.bar_charts import filtered_df
+
 books_df = pd.read_csv("bestsellers_with_categories_2022_03_27.csv")
 
 st.title("Bestselling Books")
@@ -33,6 +35,13 @@ if submit_button:
     books_df.to_csv("bestsellers_with_categories_2022_03_27.csv", index = False)
     st.sidebar.success("New Book Added")
 
+st.sidebar.header("Filter Options")
+selected_author = st.sidebar.selectbox("Select author", ["All"] + list(books_df["Author"].unique))
+selected_year = st.sidebar.selectbox("Select year", ["All"] + list(books_df["Year"].unique))
+selected_genre = st.sidebar.selectbox("Select genre", ["All"] + list(books_df["Genre"].unique))
+min_rating = st.sidebar.slider("Minimum rating", 0.0, 5.0, 0.0, 0.1)
+max_price = st.sidebar.slider("Maximum price", 0, books_df[Price], 0.0, 0.1)
+
 st.subheader("Summary Statistics")
 total_books = books_df.shape[0]
 unique_titles = books_df["Name"].nunique()
@@ -59,12 +68,12 @@ with col2:
     st.bar_chart(top_authors)
 
 st.subheader("genre distribution")
-fig = px.pie(books_df, names = "Genre", title = "Most liked Genre", color="Genre",
+fig = px.pie(filtered_books_df, names = "Genre", title = "Most liked Genre", color="Genre",
              color_discrete_sequence = px.colors.sequential.Plasma)
 st.plotly_chart(fig)
 
 st.subheader("numbber of fiction vs non fiction books")
-size = books_df.groupby(["Year", "Genre"]).size().reset_index(name = "Counts")
+size = filtered_books_df.groupby(["Year", "Genre"]).size().reset_index(name = "Counts")
 fig = px.bar(size, x = "Year", y = "Counts", color = "Genre", title = "Number of fiction vs non fiction from 2009 to 2022",
              color_discrete_sequence=px.colors.sequential.Plasma, barmode="Group")
 st.plotly_chart(fig)
@@ -76,8 +85,9 @@ fig = px.bar(top_authors, x = "Count", y = "Auhtor", orientation = "h",
              title = "Top 15 authors",
              labels = {"Count": "Counts of books", "Author": "Author"},
              color = "Count", color_continuous_scale=px.colors.sequential.Plasma)
+st.plotly_chart(fig)
 
 st.subheader("Filter Data by Genre")
 genre_filter = st.selectbox("Select Genre", books_df["Genre"].unique())
-filtered_df = books_df[books_df["Genre"] == genre_filter]
+filtered_df = filtered_books_df[filtered_books_df["Genre"] == genre_filter]
 st.write(filtered_df)
