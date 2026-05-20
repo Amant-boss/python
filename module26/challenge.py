@@ -1,12 +1,20 @@
 import pandas as pd
 import streamlit as st
 import plotly_express as px
+from datetime import datetime
 
 # 1. Load data or create a blank database template at start
 try:
     receipts_df = pd.read_csv("receipts_data.csv")
+    # Ensure Date column is in datetime format if it exists
+    if "Date" in receipts_df.columns:
+        receipts_df["Date"] = pd.to_datetime(receipts_df["Date"])
+    # Handle older CSVs that used 'Year' instead of 'Date'
+    if "Year" in receipts_df.columns and "Date" not in receipts_df.columns:
+        receipts_df["Date"] = pd.to_datetime(receipts_df["Year"].astype(str) + "-01-01")
+        receipts_df = receipts_df.drop(columns=["Year"])
 except FileNotFoundError:
-    columns = ["Owner", "Store", "Category", "Subtotal", "Tax", "Total Amount", "Year"]
+    columns = ["Owner", "Store", "Category", "Subtotal", "Tax", "Total Amount", "Date"]
     receipts_df = pd.DataFrame(columns=columns)
 
 st.title("Receipt Tracker & Analyzer")
@@ -30,7 +38,7 @@ with st.sidebar.form("receipt_form"):
         help="Type the item name, a space, and then the numeric price."
     )
 
-    purchase_year = st.number_input("Purchase Year", min_value=2020, max_value=2026, value=2026, step=1)
+    purchase_date = st.date_input("Purchase Date", value=datetime.today())
     tax_paid = st.number_input("Sales Tax Paid ($)", min_value=0.0, step=0.01, value=0.0)
 
     # INDENTED CORRECTLY INSIDE THE FORM
@@ -62,7 +70,7 @@ if submit_button:
         "Subtotal": [calculated_subtotal],
         "Tax": [tax_paid],
         "Total Amount": [final_total],
-        "Year": [purchase_year]
+        "Date": [pd.to_datetime(purchase_date)]
     }
 
     # Save back to CSV file
@@ -70,6 +78,7 @@ if submit_button:
     receipts_df = pd.concat([new_row, receipts_df], ignore_index=True)
     receipts_df.to_csv("receipts_data.csv", index=False)
     st.sidebar.success("New Receipt Logged")
+    st.rerun()
 
 # 4. Summary Statistics Dashboard Section
 st.subheader("Summary Statistics")
@@ -84,8 +93,74 @@ col2.metric("Unique Stores", unique_stores)
 col3.metric("Average Spent", f"${average_total:.2f}")
 col4.metric("Total Spending", f"${total_spent:.2f}")
 
+# --- MANAGE RECEIPTS SECTION (EDIT & DELETE) ---
+st.subheader("Manage Receipts")
+if total_receipts > 0:
+    # Safely convert to date strings for clean dropdown readability
+    date_display = receipts_df["Date"].dt.strftime('%Y-%m-%d')
+    receipt_options = {
+        idx: f"Row {idx}: {row['Owner']} at {row['Store']} on {date_display.iloc[idx]} (${row['Total Amount']:.2f})"
+        for idx, row in receipts_df.iterrows()
+    }
+
+    col_manage1, col_manage2 = st.columns([3, 1])
+    with col_manage1:
+        selected_idx = st.selectbox("Select a receipt to Edit or Delete:", options=list(receipt_options.keys()),
+                                    format_func=lambda x: receipt_options[x])
+
+    # Nested edit layout inside expander to keep it clean
+    with st.expander("✏️ Edit Selected Receipt Fields"):
+        current_row = receipts_df.loc[selected_idx]
+
+        col_ed1, col_ed2 = st.columns(2)
+        with col_ed1:
+            edit_name = st.text_input("Edit Owner Name", value=str(current_row["Owner"]))
+            edit_store = st.text_input("Edit Store / Business Name", value=str(current_row["Store"]))
+            # Extract standard date object from timestamp safely
+            current_date_val = current_row["Date"].date() if isinstance(current_row["Date"], pd.Timestamp) else \
+            current_row["Date"]
+            edit_date = st.date_input("Edit Purchase Date", value=current_date_val)
+        with col_ed2:
+            categories_list = ["Groceries", "Electronics", "Clothing", "Dining Out", "Gas/Travel", "Utilities", "Other"]
+            default_cat_idx = categories_list.index(current_row["Category"]) if current_row[
+                                                                                    "Category"] in categories_list else 0
+            edit_category = st.selectbox("Edit Expense Category", options=categories_list, index=default_cat_idx)
+            edit_subtotal = st.number_input("Edit Subtotal ($)", min_value=0.0, step=0.01,
+                                            value=float(current_row["Subtotal"]))
+            edit_tax = st.number_input("Edit Sales Tax Paid ($)", min_value=0.0, step=0.01,
+                                       value=float(current_row["Tax"]))
+
+        if st.button("💾 Save Changes", use_container_width=True):
+            receipts_df.at[selected_idx, "Owner"] = edit_name
+            receipts_df.at[selected_idx, "Store"] = edit_store
+            receipts_df.at[selected_idx, "Category"] = edit_category
+            receipts_df.at[selected_idx, "Subtotal"] = edit_subtotal
+            receipts_df.at[selected_idx, "Tax"] = edit_tax
+            receipts_df.at[selected_idx, "Total Amount"] = edit_subtotal + edit_tax
+            receipts_df.at[selected_idx, "Date"] = pd.to_datetime(edit_date)
+
+            receipts_df.to_csv("receipts_data.csv", index=False)
+            st.success("Receipt updated successfully!")
+            st.rerun()
+
+    with col_manage2:
+        st.write("")
+        st.write("")
+        if st.button("❌ Delete Receipt", use_container_width=True):
+            receipts_df = receipts_df.drop(selected_idx).reset_index(drop=True)
+            receipts_df.to_csv("receipts_data.csv", index=False)
+            st.success("Receipt deleted successfully!")
+            st.rerun()
+else:
+    st.info("No receipts available to manage.")
+# --- END OF MANAGE RECEIPTS SECTION ---
+
 st.subheader("Dataset Preview")
-st.write(receipts_df.head())
+# Display with clean date layout formatting
+preview_df = receipts_df.copy()
+if total_receipts > 0:
+    preview_df["Date"] = preview_df["Date"].dt.strftime('%Y-%m-%d')
+st.write(preview_df.head())
 
 st.subheader("Top Stores & Owners")
 col_left, col_right = st.columns(2)
@@ -122,7 +197,10 @@ else:
 
 st.subheader("Yearly Spending Trends by Category")
 if total_receipts > 0:
-    yearly_summary = receipts_df.groupby(["Year", "Category"])["Total Amount"].sum().reset_index()
+    # Grouping by year component derived directly from the date format
+    trend_df = receipts_df.copy()
+    trend_df["Year"] = trend_df["Date"].dt.year
+    yearly_summary = trend_df.groupby(["Year", "Category"])["Total Amount"].sum().reset_index()
     fig_bar = px.bar(
         yearly_summary,
         x="Year",
@@ -158,7 +236,8 @@ else:
 st.subheader("Filter Data by Category")
 if total_receipts > 0:
     category_filter = st.selectbox("Select Category to View", receipts_df["Category"].unique())
-    filtered_df = receipts_df[receipts_df["Category"] == category_filter]
+    filtered_df = receipts_df[receipts_df["Category"] == category_filter].copy()
+    filtered_df["Date"] = filtered_df["Date"].dt.strftime('%Y-%m-%d')
     st.write(filtered_df)
 else:
     st.info("No categories to filter yet.")

@@ -1,3 +1,5 @@
-Owner,Store,Category,Subtotal,Tax,Total Amount,Year
-Deon Beka,LIDL,Electronics,2387.0,6.0,2393.0,2026
-Amant Zabeli,Viva Fresh,Groceries,15.44,0.34,15.78,2026
+Owner,Store,Category,Subtotal,Tax,Total Amount,Date
+Gert Calaj,Spar,Dining Out,20.0,0.89,20.89,2026-02-12
+Amant Zabeli,Viva Fresh,Electronics,120.96999999999998,1.34,122.31,2026-01-01
+Dren Gashi,Viva Fresh,Utilities,1660.5,19.0,1679.5,2026-01-01
+Deon Beka,LIDL,Electronics,2387.0,6.0,2393.0,2026-01-01
